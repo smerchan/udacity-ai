@@ -19,7 +19,7 @@ A: First check if any box in the grid can take only single value.
    Use constraint propogation to eliminate possible solution and iterate to 
    solve the problem using following steps 
    1. Assign the boxes with single value. 
-   2. Eliminate the newly assigned value to a box from its peer row, column and grid boxes
+   2. Eliminate the newly assigned value to a box from its peer row, column, square and diagonal boxes
    3. Next check again if any boxes have single value. If so assign the box with single value
    4. Iterate through step 2 - Step 3 till no change in value is detected 
    5. Next check for boxes with least number of options. 

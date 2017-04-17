@@ -16,6 +16,20 @@ unitlist = row_units + column_units + square_units
 units = dict((s, [u for u in unitlist if s in u]) for s in boxes)
 peers = dict((s, set(sum(units[s],[]))-set([s])) for s in boxes)
 
+#
+# Add diagonal boxes to the peer list
+# Box on the left or right diagonal should have unique value 
+# i.e constraint propogation should check for box having unique
+# value within the row, column, square and additionally if the box
+# is on the diagonal, it should check for uniqueness along the diagonal
+#
+diagonal1 = [rd+cols[i] for i, rd in enumerate(rows)]
+diagonal2 = [rd+cols[8-i] for i, rd in enumerate(rows)]
+diag_unitlist = unitlist + [diagonal1, diagonal2]
+
+diag_units = dict((s, [u for u in diag_unitlist if s in u]) for s in boxes)
+diag_peers = dict((s, set(sum(diag_units[s],[]))-set([s])) for s in boxes)
+
 def assign_value(values, box, value):
     """
     Please use this function to update your values dictionary!
@@ -31,11 +45,18 @@ def assign_value(values, box, value):
         assignments.append(values.copy())
     return values
 
+#
+# Naked Twin Problem
+#
 def match_and_eliminate_twin_box_in_row(values, box):
+    """
+    Look for twin boxes in a row. i.e. find a pair of boxes
+    with identical 2 digit values.
+    Eliminate twin box values from all other boxes within the row
+    """
     match_list = []
     eliminated = False
 
-    #print("Match and eliminate twin rows for %r(%r) col:%r" % (box, values[box], cross(box[0], cols)))
     # Find all matching boxes in the row 
     for elem in cross(box[0], cols):
         if values[elem] == values[box]:
@@ -48,19 +69,21 @@ def match_and_eliminate_twin_box_in_row(values, box):
             if elem not in match_list:
                for digit in values[box]:
                    if len(values[elem]) >= 2:
-                        #print("box:%r=%r, elem:%r=%r" % (box, values[box], elem, values[elem]))
                         before_value = values[elem]
                         values[elem] = values[elem].replace(digit, '')
-                        #print("replaced elem value:%r=%r" % (elem, values[elem]))
                         if values[elem] != before_value:
                             eliminated = True
     return eliminated
 
 def match_and_eliminate_twin_box_in_col(values, box):
+    """
+    Look for twin boxes in a column. i.e. find a pair of boxes
+    with identical 2 digit values.
+    Eliminate twin box values from all other boxes within the column
+    """
     match_list = []
     eliminated = False
 
-    #print("Match and eliminate twin columns for %r(%r) col:%r" % (box, values[box], cross(rows, box[1])))
     # Find all matching boxes in the row 
     for elem in cross(rows, box[1]):
         if values[elem] == values[box]:
@@ -73,15 +96,18 @@ def match_and_eliminate_twin_box_in_col(values, box):
             if elem not in match_list:
                for digit in values[box]:
                    if len(values[elem]) >= 2:
-                        #print("box:%r=%r, elem:%r=%r" % (box, values[box], elem, values[elem]))
                         before_value = values[elem]
                         values[elem] = values[elem].replace(digit, '')
-                        #print("replaced elem value:%r=%r" % (elem, values[elem]))
                         if values[elem] != before_value:
                             eliminated = True
     return eliminated
 
 def match_and_eliminate_twin_box_in_square(values, box):
+    """
+    Look for twin boxes in a square. i.e. find a pair of boxes
+    with identical 2 digit values.
+    Eliminate twin box values from all other boxes within the square
+    """
     match_list = []
     eliminated = False
 
@@ -94,29 +120,25 @@ def match_and_eliminate_twin_box_in_square(values, box):
             box_cs = cs
 
     box_square_units = [cross(rs, cs) for rs in box_rs for cs in box_cs]
-    #print("Match and eliminate twin squares for %r(%r) grid: %r" % (box, values[box], box_square_units))
-    # Find all matching boxes in the row 
+    # Find all matching boxes in the square
     for elem_list in box_square_units:
         for elem in elem_list:
             if values[elem] == values[box]:
                 match_list.append(elem)
 
     # If this is a twin match, eliminate twin digits from 
-    # any other boxes in the row that has these twin digits
+    # any other boxes in the squre that has these twin digits
     if len(match_list) == 2:
        for elem_list in box_square_units:
             for elem in elem_list:
                 if elem not in match_list:
                    for digit in values[box]:
                        if len(values[elem]) >= 2:
-                            #print("box:%r=%r, elem:%r=%r" % (box, values[box], elem, values[elem]))
                             before_value = values[elem]
                             values[elem] = values[elem].replace(digit, '')
-                            #print("replaced elem value:%r=%r" % (elem, values[elem]))
                             if values[elem] != before_value:
                                 eliminated = True
     return eliminated
-
 
 def naked_twins(values):
     """Eliminate values using the naked twins strategy.
@@ -129,7 +151,6 @@ def naked_twins(values):
     # Find all instances of naked twins
     no_more_twins = False
     while not no_more_twins:
-        #print("Attempting to eliminate naked twins")
         # Scan through the board looking for boxes with 2 digit values
         eliminated_count = 0
         for box, value in values.items():
@@ -186,12 +207,14 @@ def eliminate(values):
     Input: A sudoku in dictionary form.
     Output: The resulting sudoku in dictionary form.
     """
-    solved_values = [box for box in values.keys() if len(values[box]) == 1]
+    new_values = values.copy()
+    solved_values = [box for box in new_values.keys() if len(new_values[box]) == 1]
     for box in solved_values:
-        digit = values[box]
-        for peer in peers[box]:
-            values[peer] = values[peer].replace(digit,'')
-    return values
+        digit = new_values[box]
+        for peer in diag_peers[box]:
+            new_values[peer] = new_values[peer].replace(digit,'')
+            assign_value(new_values, peer, new_values[peer])
+    return new_values
 
 def only_choice(values):
     """
@@ -200,13 +223,14 @@ def only_choice(values):
     Input: A sudoku in dictionary form.
     Output: The resulting sudoku in dictionary form.
     """
-    for unit in unitlist:
+    new_values = values.copy()
+    for unit in diag_unitlist:
         for digit in '123456789':
-            dplaces = [box for box in unit if digit in values[box]]
+            dplaces = [box for box in unit if digit in new_values[box]]
             if len(dplaces) == 1:
-                assign_value(values, dplaces[0], digit)
-                #values[dplaces[0]] = digit
-    return values
+                new_values[dplaces[0]] = digit
+                assign_value(new_values, dplaces[0], digit)
+    return new_values
 
 def reduce_puzzle(values):
     """
@@ -218,17 +242,32 @@ def reduce_puzzle(values):
     Input: A sudoku in dictionary form.
     Output: The resulting sudoku in dictionary form.
     """
+    new_values = values.copy()
     solved_values = [box for box in values.keys() if len(values[box]) == 1]
+
     stalled = False
     while not stalled:
-        solved_values_before = len([box for box in values.keys() if len(values[box]) == 1])
-        values = eliminate(values)
-        values = only_choice(values)
-        solved_values_after = len([box for box in values.keys() if len(values[box]) == 1])
+        # keep track of boxes that have been solved so far
+        solved_values_before = len([box for box in new_values.keys() if len(new_values[box]) == 1])
+
+        # Eliminate values through constraint propogation 
+        new_values = eliminate(new_values)
+
+        # Identify digits that can be placed in only one box
+        # within a row, a column, a square or a diagonal 
+        new_values = only_choice(new_values)
+
+        # Check if we solved any new boxes 
+        solved_values_after = len([box for box in new_values.keys() if len(new_values[box]) == 1])
+
+        # if new new boxes were solved - no further elimination 
+        # can be done through constraint propogation 
         stalled = solved_values_before == solved_values_after
-        if len([box for box in values.keys() if len(values[box]) == 0]):
+
+        if len([box for box in new_values.keys() if len(new_values[box]) == 0]):
             return False
-    return values
+
+    return new_values
 
 def search(values):
     """
@@ -236,31 +275,29 @@ def search(values):
     create a search tree and solve the sudoku.
     """
     # First, reduce the puzzle using the previous function
-    values = reduce_puzzle(values)
+    new_values = reduce_puzzle(values.copy())
 
-    if values is False:
+    if new_values is False:
         return False
 
     # Return if puzzle is solved
-    if all(len(values[s]) == 1 for s in boxes):
-        return values
+    if all(len(new_values[s]) == 1 for s in boxes):
+        return new_values
 
     # Use naked twin rule to go further 
-    values = naked_twins(values)
+    #values = naked_twins(values)
 
     # Choose one of the unfilled squares with the fewest possibilities
-    n,s = min((len(values[s]), s) for s in boxes if len(values[s]) > 1)
+    n,s = min((len(new_values[s]), s) for s in boxes if len(new_values[s]) > 1)
 
     # Now use recursion to solve each one of the resulting sudokus, 
     # and if one returns a value (not False), return that answer
-    for digit in values[s]:
-        copy_values = values.copy()
+    for digit in new_values[s]:
+        copy_values = new_values.copy()
         copy_values[s] = digit
         solution = search(copy_values)
         if solution:
             return solution
-
-    return values
 
 def solve(grid):
     """
@@ -271,12 +308,10 @@ def solve(grid):
     Returns:
         The dictionary representation of the final sudoku grid. False if no solution exists.
     """
-    values = grid_values(grid)
-    solution = search(values)
+    grid = grid_values(grid)
+    solution = search(grid)
     if solution:
         return solution
-    return {}
-
 
 if __name__ == '__main__':
     #diag_sudoku_grid = '2.............62....1....7...6..8...3...9...7...6..4...4....8....52.............3'
